@@ -1,31 +1,58 @@
 from fastapi import FastAPI
-from typing import Optional
+from redis_om import get_redis_connection, HashModel, Field
 from pydantic import BaseModel
 
 # Define the app
 app = FastAPI()
 
-@app.get("/")
-def read_root():
-    return {"message": "Hello, World!"}
+# Connect to Redis
+redis = get_redis_connection(
+    host='redis-14467.c274.us-east-1-3.ec2.redns.redis-cloud.com',
+    port=14467,
+    decode_responses=True,
+    username="default",
+    password="hflUqyUQNjkYVbneX4D4TihchnI3k0Ss",
+)
 
-@app.get("/courses/{course_name}")
-def read_course(course_name):
-    return {"course_name": course_name}
-
-course_items = [{"course_name": "Python"}, {"course_name": "NodeJS"}, {"course_name": "Machine Learning"}]
-@app.get("/courses/")
-def read_courses(start: int, end: int):
-    return course_items[start: start+end]
-
-class Course(BaseModel):
+# Define Pydantic model for the response/requests
+class ProductCreateRequest(BaseModel):
     name: str
-    description: Optional[str] = None
-    price: int
-    author: Optional[str] = None
+    price: float
+    quantity: int
 
-app = FastAPI()
+class ProductResponse(BaseModel):
+    name: str
+    price: float
+    quantity: int
+    pk: str 
 
-@app.post("/courses/")
-def create_course(course: Course):
-    return course
+# Define the Redis-OM Product model
+class Product(HashModel):
+    name: str
+    price: float
+    quantity: int
+
+    class Meta:
+        database = redis 
+
+
+@app.get("/products", response_model=list[ProductResponse])
+def all():
+    pks = Product.all_pks()
+    if pks:
+        products = [Product.get(pk) for pk in pks]
+        return [ProductResponse(name=product.name, price=product.price, quantity=product.quantity, pk=product.pk) for product in products]
+    else:
+        return {"message": "No products found"}
+
+# FastAPI route to create a new product
+@app.post("/products", response_model=ProductResponse)
+def create(product: ProductCreateRequest):
+    new_product = Product(name=product.name, price=product.price, quantity=product.quantity)
+    new_product.save()
+    return ProductResponse(name=new_product.name, price=new_product.price, quantity=new_product.quantity, pk=new_product.pk)
+
+@app.delete('/products/{pk}')
+def delete(pk:str):
+    productss = Product.get(pk)
+    return productss.delete(pk)
