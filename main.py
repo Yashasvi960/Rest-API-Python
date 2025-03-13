@@ -11,7 +11,7 @@ redis = get_redis_connection(
     port=14467,
     decode_responses=True,
     username="default",
-    password="hflUqyUQNjkYVbneX4D4TihchnI3k0Ss",
+    password="******",
 )
 
 # Define Pydantic model for the response/requests
